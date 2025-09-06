@@ -1,0 +1,13 @@
+{
+  "name": "demo-rpc",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "vercel-build": "echo 'No build step required'"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.2",
+    "openai": "^5.19.1",
+    "pg": "^8.16.3"
+  }
+}
