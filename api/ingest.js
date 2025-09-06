@@ -53,6 +53,25 @@ async function getEmbedding(text) {
 }
 
 export default async function handler(req, res) {
+  // Allow requests from anywhere (you can restrict later)
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  // Handle preflight requests
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  if (req.method === "POST") {
+    const { message } = req.body;
+
+    return res.status(200).json({
+      success: true,
+      received: message,
+    });
+  }
+
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
@@ -63,13 +82,17 @@ export default async function handler(req, res) {
   if (secretRequired) {
     const header = req.headers["x-ingest-secret"];
     if (!header || header !== process.env.INGEST_SECRET) {
-      return res.status(401).json({ error: "Unauthorized (invalid ingest secret)" });
+      return res
+        .status(401)
+        .json({ error: "Unauthorized (invalid ingest secret)" });
     }
   }
 
   const property = req.body;
   if (!property || !property.id) {
-    return res.status(400).json({ error: "Request body must include property.id" });
+    return res
+      .status(400)
+      .json({ error: "Request body must include property.id" });
   }
 
   // Build embedding text
@@ -88,9 +111,12 @@ export default async function handler(req, res) {
   const embeddingLiteral = `[${embedding.join(",")}]`;
 
   // Normalize values for DB
-  const offerEndsAt = property.offerEndsAt ? new Date(property.offerEndsAt).toISOString() : null;
+  const offerEndsAt = property.offerEndsAt
+    ? new Date(property.offerEndsAt).toISOString()
+    : null;
   const projectName = property.project?.name || property.projectName || null;
-  const developerName = property.developer?.fullName || property.developerName || null;
+  const developerName =
+    property.developer?.fullName || property.developerName || null;
 
   // Postgres upsert using parameterized query
   const client = new Client({ connectionString: process.env.DATABASE_URL });
@@ -179,14 +205,14 @@ export default async function handler(req, res) {
     developerName,
     property.searchTags ?? null,
     property.secondaryTags ?? null,
-    property.buildingAmenities ?? null,      // text[]
-    property.unitFeatures ?? null,           // text[]
-    property.kitchenFeatures ?? null,        // text[]
-    property.parkingAndAccess ?? null,       // text[]
-    property.greenFeatures ?? null,          // text[]
-    property.accessibilityFeatures ?? null,  // text[]
-    property.safetyAndSecurity ?? null,      // text[]
-    embeddingLiteral
+    property.buildingAmenities ?? null, // text[]
+    property.unitFeatures ?? null, // text[]
+    property.kitchenFeatures ?? null, // text[]
+    property.parkingAndAccess ?? null, // text[]
+    property.greenFeatures ?? null, // text[]
+    property.accessibilityFeatures ?? null, // text[]
+    property.safetyAndSecurity ?? null, // text[]
+    embeddingLiteral,
   ];
 
   try {
@@ -196,7 +222,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, id: property.id });
   } catch (err) {
     console.error("Postgres upsert error:", err);
-    try { await client.end(); } catch (_) {}
+    try {
+      await client.end();
+    } catch (_) {}
     return res.status(500).json({ error: "Database upsert failed" });
   }
 }
