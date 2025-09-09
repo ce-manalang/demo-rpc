@@ -20,8 +20,8 @@ function prettyList(arr) {
 
 function buildEmbeddingText(p) {
   // pick fields that matter semantically; keep it compact and readable
-  const projectName = p.project?.name || p.projectName || "";
-  const developerName = p.developer?.fullName || p.developerName || "";
+  const projectName = p.projectName || "";
+  const developerName = p.developerName || "";
   const tags = [p.searchTags, p.secondaryTags].filter(Boolean).join(" ");
 
   const parts = [
@@ -53,75 +53,66 @@ async function getEmbedding(text) {
 }
 
 export default async function handler(req, res) {
-  // Allow requests from anywhere (you can restrict later)
+  // --- Always set CORS headers ---
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  // Handle preflight requests
+  // --- Handle preflight (OPTIONS) ---
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  if (req.method === "POST") {
-    const { message } = req.body;
-
-    return res.status(200).json({
-      success: true,
-      received: message,
-    });
-  }
-
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+    // Even 405 responses need the headers above
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Optional lightweight authorization for dev/prod safety
-  const secretRequired = Boolean(process.env.INGEST_SECRET);
-  if (secretRequired) {
-    const header = req.headers["x-ingest-secret"];
-    if (!header || header !== process.env.INGEST_SECRET) {
-      return res
-        .status(401)
-        .json({ error: "Unauthorized (invalid ingest secret)" });
-    }
-  }
-
-  const property = req.body;
-  if (!property || !property.id) {
-    return res
-      .status(400)
-      .json({ error: "Request body must include property.id" });
-  }
-
-  // Build embedding text
-  const embeddingText = buildEmbeddingText(property);
-
-  // Get embedding
-  let embedding;
   try {
-    embedding = await getEmbedding(embeddingText);
-  } catch (err) {
-    console.error("OpenAI embedding error:", err);
-    return res.status(500).json({ error: "Failed to generate embedding" });
-  }
+    const { message: property } = req.body;
 
-  // Convert embedding to pgvector literal: '[0.1,0.2,...]'
-  const embeddingLiteral = `[${embedding.join(",")}]`;
+    // Optional lightweight authorization
+    const secretRequired = Boolean(process.env.INGEST_SECRET);
+    if (secretRequired) {
+      const header = req.headers["x-ingest-secret"];
+      if (!header || header !== process.env.INGEST_SECRET) {
+        return res
+          .status(401)
+          .json({ error: "Unauthorized (invalid ingest secret)" });
+      }
+    }
 
-  // Normalize values for DB
-  const offerEndsAt = property.offerEndsAt
-    ? new Date(property.offerEndsAt).toISOString()
-    : null;
-  const projectName = property.project?.name || property.projectName || null;
-  const developerName =
-    property.developer?.fullName || property.developerName || null;
+    if (!property || !property.id) {
+      return res
+        .status(400)
+        .json({ error: "Request body must include property.id" });
+    }
 
-  // Postgres upsert using parameterized query
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+    // Build embedding text
+    const embeddingText = buildEmbeddingText(property);
 
-  const q = `
+    // Get embedding
+    let embedding;
+    try {
+      embedding = await getEmbedding(embeddingText);
+    } catch (err) {
+      console.error("OpenAI embedding error:", err);
+      return res.status(500).json({ error: "Failed to generate embedding" });
+    }
+
+    // Convert embedding to pgvector literal: '[0.1,0.2,...]'
+    const embeddingLiteral = `[${embedding.join(",")}]`;
+
+    // Normalize values for DB
+    const offerEndsAt = property.offerEndsAt
+      ? new Date(property.offerEndsAt).toISOString()
+      : null;
+
+    // Postgres client
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+
+    // Properties upsert query
+    const q = `
     INSERT INTO properties (
       id, name, summary, ptype, area, min_area, max_area,
       bedrooms, bathrooms, description, location_name,
@@ -176,55 +167,98 @@ export default async function handler(req, res) {
       accessibility_features = EXCLUDED.accessibility_features,
       safety_and_security = EXCLUDED.safety_and_security,
       embedding = EXCLUDED.embedding;
-  `;
+    `;
 
-  const params = [
-    property.id,
-    property.name ?? null,
-    property.summary ?? null,
-    property.ptype ?? null,
-    property.area ?? null,
-    property.minArea ?? null,
-    property.maxArea ?? null,
-    property.bedrooms ?? null,
-    property.bathrooms ?? null,
-    property.description ?? null,
-    property.locationName ?? null,
-    property.location?.latitude ?? null,
-    property.location?.longitude ?? null,
-    property.preSelling ?? null,
-    property.pstatus ?? null,
-    property.price ?? null,
-    property.discounted ?? null,
-    property.discountValue ?? null,
-    property.featured ?? null,
-    property.bestDeal ?? null,
-    property.isLimited ?? null,
-    offerEndsAt,
-    projectName,
-    developerName,
-    property.searchTags ?? null,
-    property.secondaryTags ?? null,
-    property.buildingAmenities ?? null, // text[]
-    property.unitFeatures ?? null, // text[]
-    property.kitchenFeatures ?? null, // text[]
-    property.parkingAndAccess ?? null, // text[]
-    property.greenFeatures ?? null, // text[]
-    property.accessibilityFeatures ?? null, // text[]
-    property.safetyAndSecurity ?? null, // text[]
-    embeddingLiteral,
-  ];
+    const params = [
+      property.id,
+      property.name ?? null,
+      property.summary ?? null,
+      property.ptype ?? null,
+      property.area ?? null,
+      property.minArea ?? null,
+      property.maxArea ?? null,
+      property.bedrooms ?? null,
+      property.bathrooms ?? null,
+      property.description ?? null,
+      property.locationName ?? null,
+      property.location?.latitude ?? null,
+      property.location?.longitude ?? null,
+      property.preSelling ?? null,
+      property.pstatus ?? null,
+      property.price ?? null,
+      property.discounted ?? null,
+      property.discountValue ?? null,
+      property.featured ?? null,
+      property.bestDeal ?? null,
+      property.isLimited ?? null,
+      offerEndsAt,
+      property.project,
+      property.developer,
+      property.searchTags ?? null,
+      property.secondaryTags ?? null,
+      property.buildingAmenities ?? null,
+      property.unitFeatures ?? null,
+      property.kitchenFeatures ?? null,
+      property.parkingAndAccess ?? null,
+      property.greenFeatures ?? null,
+      property.accessibilityFeatures ?? null,
+      property.safetyAndSecurity ?? null,
+      embeddingLiteral,
+    ];
 
-  try {
-    await client.connect();
-    await client.query(q, params);
-    await client.end();
-    return res.status(200).json({ success: true, id: property.id });
-  } catch (err) {
-    console.error("Postgres upsert error:", err);
     try {
+      await client.connect();
+
+      // upsert property
+      await client.query(q, params);
+
+      // ---- NEW: sync unit_configurations ----
+      if (Array.isArray(property.unitConfiguration)) {
+        // clear old rows for this property
+        await client.query(
+          "DELETE FROM unit_configurations WHERE property_id = $1",
+          [property.id]
+        );
+
+        // insert each unit configuration
+        for (const unit of property.unitConfiguration) {
+          await client.query(
+            `
+            INSERT INTO unit_configurations (
+              id, property_id, unit_name, unit_type, bedrooms,
+              bathrooms, floor_area, config_price, unit_features
+            )
+            VALUES (
+              gen_random_uuid(), $1, $2, $3, $4,
+              $5, $6, $7, $8
+            )
+            `,
+            [
+              property.id,
+              unit.unitName ?? null,
+              unit.unitType ?? null,
+              unit.bedrooms ?? null,
+              unit.bathrooms ?? null,
+              unit.floorArea ?? null,
+              unit.configPrice ?? null,
+              unit.unitFeatures ?? null, // raw text
+            ]
+          );
+        }
+      }
+      // ---- end new ----
+
       await client.end();
-    } catch (_) {}
-    return res.status(500).json({ error: "Database upsert failed" });
+      return res.status(200).json({ success: true, id: property.id });
+    } catch (err) {
+      console.error("Postgres upsert error:", err);
+      try {
+        await client.end();
+      } catch (_) {}
+      return res.status(500).json({ error: "Database upsert failed" });
+    }
+  } catch (err) {
+    console.error("Handler error:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 }
