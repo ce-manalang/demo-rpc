@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-client-id, x-conversation-id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-client-id, x-conversation-id, x-new-chat");
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
   console.log('[Agent Chat] Request received');
 
-  const { messages, clientId: clientIdInBody, conversationId: conversationIdInBody } = req.body || {};
+  const { messages, clientId: clientIdInBody, conversationId: conversationIdInBody, isNewChat: isNewChatInBody } = req.body || {};
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ 
@@ -43,9 +43,18 @@ export default async function handler(req, res) {
     // Resolve clientId (prefer header, fallback to body, else a simple per-request bucket)
     const clientId = (req.headers['x-client-id'] || clientIdInBody || 'default').toString();
     const conversationIdHeader = req.headers['x-conversation-id'];
+    const isNewChat = req.headers['x-new-chat'] === 'true' || isNewChatInBody === true;
     let conversationId = (conversationIdHeader || conversationIdInBody || '').toString() || null;
 
     const openai = new OpenAI();
+    
+    // If explicitly requesting new chat, clear any cached conversationId for this client
+    if (isNewChat) {
+      conversationIdByClient.delete(clientId);
+      conversationId = null;
+      console.log('[Agent Chat] New chat requested, cleared cached conversationId for client', clientId);
+    }
+    
     if (!conversationId) {
       // Try in-memory cache by client
       conversationId = conversationIdByClient.get(clientId) || null;
