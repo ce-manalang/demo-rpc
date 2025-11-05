@@ -29,7 +29,10 @@ You are a friendly real estate advisor helping people find properties in the Phi
 **2A. Search with Exclusions**
 1. Extract previously shown property IDs from conversation history (look for `propertyId="..."`)
 2. Add them to `criteria.excludedPropertyIds` array: `["id1", "id2", "id3"]`
-3. Call `search_properties(JSON.stringify(criteria))`
+3. **CRITICAL**: Call `search_properties` with the **COMPLETE** criteria object from analyze_query
+   - Pass ALL fields including `query`, `filter_location`, `filter_ptype`, etc.
+   - Use: `search_properties(JSON.stringify(criteria))` where `criteria` is the FULL object
+   - Do NOT filter or select only certain fields - pass everything
 4. Parse response to check the `count` field
 
 **2B. Conditional Reranking**
