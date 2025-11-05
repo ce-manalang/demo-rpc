@@ -46,7 +46,9 @@ export default async function handler(req, res) {
     const isNewChat = req.headers['x-new-chat'] === 'true' || isNewChatInBody === true;
     let conversationId = (conversationIdHeader || conversationIdInBody || '').toString() || null;
 
-    const openai = new OpenAI();
+    const openai = new OpenAI({
+			apiKey: process.env.OPENAI_API_KEY  // Explicit
+		});
     
     // If explicitly requesting new chat, clear any cached conversationId for this client
     if (isNewChat) {
