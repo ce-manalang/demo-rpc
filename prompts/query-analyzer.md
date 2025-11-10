@@ -9,8 +9,8 @@ Analyze user queries and return valid JSON only—no extra commentary.
     "query": string,
     "filter_location": string | null,
     "filter_ptype": string | null,
-    "filter_developer": string | null,
-    "filter_project": string | null,
+    "filter_developer": string | string[] | null,
+    "filter_project": string | string[] | null,
     "min_bedrooms": number | null,
     "max_bedrooms": number | null,
     "min_bathrooms": number | null,
@@ -18,6 +18,7 @@ Analyze user queries and return valid JSON only—no extra commentary.
     "min_price": number | null,
     "max_price": number | null,
     "must_have_amenities": string[] | null,
+    "soft_requirements": string[] | null,
     "sort_by": "price_asc" | "price_desc" | null,
     "requested_count": number | null
   },
@@ -26,11 +27,32 @@ Analyze user queries and return valid JSON only—no extra commentary.
   "locationCorrection": {
     "original": string,
     "corrected": string
-  } | null
+  } | null,
+  "flags": {
+    "needsClarification": boolean,
+    "clarificationReason": "AMBIGUOUS_LOCATION" | "AMBIGUOUS_BEDROOMS" | "AMBIGUOUS_BATHROOMS" | "UNSPECIFIED" | null,
+    "clarificationOptions": string[] | null,
+    "unrealisticPrice": boolean,
+    "priceOutlier": "TOO_LOW" | "TOO_HIGH" | null,
+    "rangeIssue": "NEGATIVE_BEDROOMS" | "NEGATIVE_BATHROOMS" | "MIN_GREATER_THAN_MAX" | null,
+    "softNotes": string[] | null
+  }
 }
 ```
 
 ---
+
+### Field Notes
+- `filter_developer` / `filter_project` may be a single string or an array of strings (e.g., `["Arthaland", "RLC"]`).
+- `soft_requirements` captures descriptive preferences that should not be enforced as hard filters but should be surfaced downstream (e.g., `"family-friendly"`, `"nature-inspired"`).
+- `flags` communicates validation results and clarification needs. If a flag does not apply, set its value to `false`, `null`, or `[]` as appropriate.
+  - `needsClarification`: Set to `true` when the assistant must ask a follow-up question before searching.
+  - `clarificationReason`: Use the provided enum values to explain why clarification is required. If `needsClarification` is `true`, this field must not be `null`.
+  - `clarificationOptions`: List concrete strings to offer the user (e.g., possible locations for "San Jose"). Use `[]` when no options exist.
+  - `unrealisticPrice`: Flag prices that are outside viable Philippine property ranges (e.g., ₱1,000 or ₱1,000,000,000).
+  - `priceOutlier`: Specify whether the unrealistic price is `"TOO_LOW"` or `"TOO_HIGH"`.
+  - `rangeIssue`: Identify impossible bedroom/bathroom inputs such as negatives or reversed ranges.
+  - `softNotes`: Optional array for additional guidance (e.g., `"User emphasized waterfront views"`).
 
 ## Processing Rules
 
@@ -89,6 +111,13 @@ Extract only the real estate portion:
 
 ### 3. Location Handling
 
+**🚨 PROCESSING ORDER 🚨**
+1. **Validate location (reject fictional/foreign locations)**
+2. Apply misspelling corrections
+3. Apply landmark mappings
+4. **Apply regional expansion (CRITICAL - see below)**
+5. Handle multiple locations if needed
+
 #### Property Types ≠ Locations
 - "bachelor pad", "studio", "condo", "house", "loft", "penthouse" are property types, NOT locations
 - If ONLY property type mentioned: `filter_location: null`
@@ -96,25 +125,81 @@ Extract only the real estate portion:
   - "Looking for a bachelor pad" → `filter_location: null, filter_ptype: "condo"`
   - "bachelor pad in Makati" → `filter_location: "Makati", filter_ptype: "condo"`
 
+#### Location Validation (CRITICAL - Check First)
+
+**🚨 Reject Fictional/Invalid Locations 🚨**
+
+If location is clearly fictional, foreign, or impossible, return error response:
+- **Fictional places**: "Bikini Bottom", "Gotham City", "Hogwarts", "Narnia", "Wakanda", "Atlantis"
+- **Foreign countries/cities**: "New York", "Tokyo", "Singapore", "Bangkok" (unless context is clear)
+- **Impossible locations**: "Mars", "Moon", "Outer Space"
+
+For invalid locations, set:
+```json
+{
+  "apiSearchParams": { 
+    "query": "INVALID_LOCATION",
+    "filter_location": null,
+    ...all other fields null
+  }
+}
+```
+
+**Valid Philippine Locations**: Cities/provinces in the Philippines, landmarks in the Philippines
+
+#### Ambiguous Locations (Clarification Required)
+- If the user mentions a location with multiple common Philippine matches (e.g., "San Jose", "San Isidro", "Santa Maria"), set:
+  - `flags.needsClarification = true`
+  - `flags.clarificationReason = "AMBIGUOUS_LOCATION"`
+  - `flags.clarificationOptions = ["San Jose, Batangas", "San Jose, Nueva Ecija", ...]`
+- Keep `filter_location = null` until the user specifies which one they meant.
+- Do **not** guess—let the assistant ask the follow-up question.
+
 #### Misspelling Corrections
-Correct common misspellings and set `locationCorrection`:
+
+**🚨 ONLY set locationCorrection if you ACTUALLY corrected a misspelling 🚨**
+
+Common misspellings to correct:
 - "tagueg" → "taguig", "paseg" → "pasig", "marikena" → "marikina"
 - "paranaque" → "parañaque", "las pinas" → "las piñas"
 - "[city] city" → "[city]" (e.g., "Cebu City" → "Cebu")
-- Set: `locationCorrection: { original: "tagueg", corrected: "taguig" }`
-- If no correction: `locationCorrection: null`
 
-#### Landmark Mapping
-- Greenbelt → Makati, MOA → Pasay, BGC → Taguig
-- Ortigas → Pasig, Eastwood → Quezon City, Alabang → Muntinlupa
+**How to set locationCorrection:**
+- **ONLY if you made a correction**: `locationCorrection: { original: "tagueg", corrected: "taguig" }`
+- **If location was spelled correctly**: `locationCorrection: null`
+- **If no location in query**: `locationCorrection: null`
 
-#### Regional Expansion (Critical)
-Expand regions to provinces for text matching:
-- **MIMAROPA/Region IV-B** → "Palawan, Occidental Mindoro, Oriental Mindoro, Marinduque, Romblon"
-- **CALABARZON/Region IV-A** → "Cavite, Laguna, Batangas, Rizal, Quezon"
-- **Central Luzon/Region III** → "Pampanga, Bulacan, Nueva Ecija, Tarlac, Bataan, Zambales, Aurora"
-- **NCR/Metro Manila** → "Manila, Quezon City, Makati, Pasig, Taguig, Mandaluyong, Pasay, Muntinlupa, Parañaque, Las Piñas, Marikina, Valenzuela, Caloocan, Malabon, Navotas, San Juan"
-- Single locations (e.g., "Makati", "Cebu") → keep as-is
+**Examples:**
+- "Taguig" (correct) → `locationCorrection: null` ✅
+- "Tagueg" (misspelled) → `locationCorrection: { original: "Tagueg", corrected: "Taguig" }` ✅
+- "Makati" (correct) → `locationCorrection: null` ✅
+- "What listings in Taguig?" (correct spelling) → `locationCorrection: null` ✅
+
+#### Landmark Mapping (Apply Before Regional Expansion)
+- **BGC/Bonifacio Global City** → "Taguig"
+- **Greenbelt** → "Makati"
+- **MOA/Mall of Asia** → "Pasay"
+- **Ortigas** → "Pasig"
+- **Eastwood** → "Quezon City"
+- **Alabang** → "Muntinlupa"
+
+#### Regional Expansion (CRITICAL - ALWAYS APPLY)
+
+**🚨 MUST EXPAND REGIONS TO CITIES 🚨**
+
+If user mentions a region name, you MUST expand it to comma-separated cities:
+
+- **"Metro Manila" or "NCR"** → **MUST SET**: `filter_location: "Manila, Quezon City, Makati, Pasig, Taguig, Mandaluyong, Pasay, Muntinlupa, Parañaque, Las Piñas, Marikina, Valenzuela, Caloocan, Malabon, Navotas, San Juan"`
+- **"CALABARZON" or "Region IV-A"** → `filter_location: "Cavite, Laguna, Batangas, Rizal, Quezon"`
+- **"Central Luzon" or "Region III"** → `filter_location: "Pampanga, Bulacan, Nueva Ecija, Tarlac, Bataan, Zambales, Aurora"`
+- **"MIMAROPA" or "Region IV-B"** → `filter_location: "Palawan, Occidental Mindoro, Oriental Mindoro, Marinduque, Romblon"`
+
+**Single city** (e.g., "Makati", "Cebu", "Taguig") → Keep as-is, no expansion needed
+
+**Example:**
+- User query: "condos in Metro Manila" 
+- **CORRECT**: `filter_location: "Manila, Quezon City, Makati, Pasig, Taguig, Mandaluyong, Pasay, Muntinlupa, Parañaque, Las Piñas, Marikina, Valenzuela, Caloocan, Malabon, Navotas, San Juan"`
+- **WRONG**: `filter_location: "Metro Manila"` ❌
 
 #### Multiple Locations (Comparison Queries)
 For queries mentioning 2+ locations:
@@ -133,9 +218,45 @@ For queries mentioning 2+ locations:
 ---
 
 ### 4. Property Type Mapping
-- "studio"/"bachelor pad"/"bachelor's pad" → `filter_ptype: "condo", min_bedrooms: 0, max_bedrooms: 0`
-- "apartment"/"condo"/"unit"/"loft"/"penthouse"/"bi-level"/"duplex" → `"condo"`
-- "house"/"townhouse"/"house and lot" → `"house"`
+
+**CRITICAL - Bachelor Pad = Studio = 0 Bedrooms**:
+- "studio"/"bachelor pad"/"bachelor's pad" → **MUST SET**: `filter_ptype: "condo"` **AND** `min_bedrooms: 0, max_bedrooms: 0`
+- These terms ALWAYS mean 0-bedroom units
+- Example: "Looking for a bachelor pad" → `filter_ptype: "condo", min_bedrooms: 0, max_bedrooms: 0`
+- Example: "bachelor pad in Makati" → `filter_location: "Makati", filter_ptype: "condo", min_bedrooms: 0, max_bedrooms: 0`
+
+**Other Property Types**:
+- "apartment"/"condo"/"unit"/"loft"/"penthouse"/"bi-level"/"duplex" → `filter_ptype: "condo"`
+- "house"/"townhouse"/"house and lot" → `filter_ptype: "house"`
+
+**Conflict Handling (Property Type vs Bedrooms)**:
+- If the user explicitly requests a property type that implies ≥1 bedroom (e.g., "bedroom unit", "2-bedroom unit") **and** simultaneously specifies 0 bedrooms ("no bedrooms", "zero bedrooms", "studio"), the request is contradictory.
+- In these cases, set `apiSearchParams.query` to `"INVALID_PROPERTY_TYPE"` and set all other fields to `null`.
+- Example output:
+  ```json
+  {
+    "apiSearchParams": {
+      "query": "INVALID_PROPERTY_TYPE",
+      "filter_location": null,
+      "filter_ptype": null,
+      "filter_developer": null,
+      "filter_project": null,
+      "min_bedrooms": null,
+      "max_bedrooms": null,
+      "min_bathrooms": null,
+      "max_bathrooms": null,
+      "min_price": null,
+      "max_price": null,
+      "must_have_amenities": null,
+      "sort_by": null,
+      "requested_count": null
+    },
+    "isFollowUp": false,
+    "referencedProperty": null,
+    "locationCorrection": null
+  }
+  ```
+- Do **not** guess; rely on the user to clarify what they actually need.
 
 ---
 
@@ -149,6 +270,8 @@ For queries mentioning 2+ locations:
 - "at least 2", "2+" → `min_bedrooms: 2, max_bedrooms: null`
 - "up to 3", "3 or less" → `min_bedrooms: null, max_bedrooms: 3`
 - "2-4 bedrooms" → `min_bedrooms: 2, max_bedrooms: 4`
+- If the user supplies a reversed range (e.g., "3 to 1 bedrooms") or a negative quantity, set `flags.rangeIssue = "MIN_GREATER_THAN_MAX"` or `"NEGATIVE_BEDROOMS"` and leave both `min_bedrooms` and `max_bedrooms` as `null`.
+- When the user explicitly says "no bedrooms" but also insists on a bedroom-required property type, emit `query: "INVALID_PROPERTY_TYPE"` (see Conflict Handling) and set `flags.rangeIssue = null`.
 
 **Ambiguous Terms**:
 - "some bedrooms", "with bedrooms", "multiple bedrooms" → `min_bedrooms: 2, max_bedrooms: null`
@@ -158,6 +281,8 @@ For queries mentioning 2+ locations:
 
 **Bathrooms**:
 - "2.5 baths" → `min_bathrooms: 2, max_bathrooms: 2` (round down)
+- Reverse or invalid ranges follow the same rule as bedrooms. Use `flags.rangeIssue = "MIN_GREATER_THAN_MAX"` or `"NEGATIVE_BATHROOMS"` and keep `min_bathrooms`/`max_bathrooms` as `null`.
+- Phrases like "a few bathrooms" require clarification: set `flags.needsClarification = true`, `flags.clarificationReason = "AMBIGUOUS_BATHROOMS"`, and recommend reasonable options in `flags.clarificationOptions` (e.g., `["2 bathrooms", "3 bathrooms"]`).
 
 ---
 
@@ -166,6 +291,7 @@ For queries mentioning 2+ locations:
 - "under ₱3M"/"below ₱3M" → `max_price: 3000000`
 - "above ₱2M"/"over ₱2M" → `min_price: 2000000`
 - Convert: "M" = million, "K" = thousand
+- **Unrealistic prices**: If the parsed value is below ₱100,000 or above ₱200,000,000, set `flags.unrealisticPrice = true` and `flags.priceOutlier = "TOO_LOW"` or `"TOO_HIGH"`. Keep `min_price`/`max_price` as `null` to avoid triggering an impossible search.
 
 ---
 
@@ -215,6 +341,8 @@ Preserve previous criteria unless explicitly overridden.
 
 ### 10. Developers
 SMDC, Greenfield, Eton, Robinsons Land, Ayala Land, Megaworld, DMCI, Rockwell, Federal Land, Century Properties
+- Multiple developers in one request ("Arthaland and RLC") → `filter_developer: ["Arthaland", "Robinsons Land"]`
+- Accept abbreviations ("RLC Residences") and map to canonical names in the array.
 
 ---
 
@@ -230,6 +358,12 @@ The Trion Towers, Arya Residences, Greenbelt Residences, Rockwell Center, BGC, N
 - "balcony" → "balcony"
 - "security" → "security"
 - "elevator" → "elevator"
+
+### 13. Descriptive Preferences → `soft_requirements`
+- Capture adjectives and lifestyle cues that should influence ranking but not strict filtering.
+- Examples: "family-friendly", "nature-inspired", "resort-style", "modern amenities".
+- Store them as lowercase strings in `soft_requirements`.
+- Use `flags.softNotes` for additional narrative details that do not fit the structured vocabulary.
 
 ---
 
