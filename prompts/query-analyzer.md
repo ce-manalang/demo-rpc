@@ -168,6 +168,7 @@ Common misspellings to correct:
 - **ONLY if you made a correction**: `locationCorrection: { original: "tagueg", corrected: "taguig" }`
 - **If location was spelled correctly**: `locationCorrection: null`
 - **If no location in query**: `locationCorrection: null`
+- **Do NOT mark this as a clarification.** Keep `flags.needsClarification = false` and set `filter_location` to the corrected spelling so the assistant can proceed without asking the user again.
 
 **Examples:**
 - "Taguig" (correct) → `locationCorrection: null` ✅
