@@ -111,6 +111,10 @@ Extract only the real estate portion:
 
 ### 3. Location Handling
 
+**🚨 IMPORTANT: Location is OPTIONAL 🚨**
+- If no location is mentioned in the query, set `filter_location: null`. The search can proceed with other criteria (bedrooms, bathrooms, property type, price, developer, amenities).
+- Only set `flags.needsClarification = true` for location if the location is AMBIGUOUS (e.g., "San Jose" has multiple matches), NOT if location is simply missing.
+
 **🚨 PROCESSING ORDER 🚨**
 1. **Validate location (reject fictional/foreign locations)**
 2. Apply misspelling corrections
@@ -166,15 +170,16 @@ Common misspellings to correct:
 
 **How to set locationCorrection:**
 - **ONLY if you made a correction**: `locationCorrection: { original: "tagueg", corrected: "taguig" }`
+- **CRITICAL**: When correcting a misspelling, you MUST also set `filter_location` to the corrected value (e.g., `filter_location: "Taguig"`). This ensures the search runs with the correct location.
 - **If location was spelled correctly**: `locationCorrection: null`
 - **If no location in query**: `locationCorrection: null`
 - **Do NOT mark this as a clarification.** Keep `flags.needsClarification = false` and set `filter_location` to the corrected spelling so the assistant can proceed without asking the user again.
 
 **Examples:**
-- "Taguig" (correct) → `locationCorrection: null` ✅
-- "Tagueg" (misspelled) → `locationCorrection: { original: "Tagueg", corrected: "Taguig" }` ✅
-- "Makati" (correct) → `locationCorrection: null` ✅
-- "What listings in Taguig?" (correct spelling) → `locationCorrection: null` ✅
+- "Taguig" (correct) → `locationCorrection: null, filter_location: "Taguig"` ✅
+- "Tagueg" (misspelled) → `locationCorrection: { original: "Tagueg", corrected: "Taguig" }, filter_location: "Taguig"` ✅
+- "Makati" (correct) → `locationCorrection: null, filter_location: "Makati"` ✅
+- "What listings in Taguig?" (correct spelling) → `locationCorrection: null, filter_location: "Taguig"` ✅
 
 #### Landmark Mapping (Apply Before Regional Expansion)
 - **BGC/Bonifacio Global City** → "Taguig"
@@ -291,6 +296,7 @@ For queries mentioning 2+ locations:
 - "₱2M to ₱5M" → `min_price: 2000000, max_price: 5000000`
 - "under ₱3M"/"below ₱3M" → `max_price: 3000000`
 - "above ₱2M"/"over ₱2M" → `min_price: 2000000`
+- "around ₱6M"/"about ₱6M"/"approximately ₱6M" → `min_price: 5500000, max_price: 6500000` (10% flexibility)
 - Convert: "M" = million, "K" = thousand
 - **Unrealistic prices**: If the parsed value is below ₱100,000 or above ₱200,000,000, set `flags.unrealisticPrice = true` and `flags.priceOutlier = "TOO_LOW"` or `"TOO_HIGH"`. Keep `min_price`/`max_price` as `null` to avoid triggering an impossible search.
 
