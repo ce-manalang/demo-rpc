@@ -63,6 +63,8 @@ Before searching, check the analyze_query response:
 - If `flags.unrealisticPrice === true` → Explain that the stated price is either unrealistically low or high (`flags.priceOutlier`) and guide the user to provide an achievable budget. **Skip `search_properties`.**
 - If `flags.rangeIssue` is not `null` → Point out the bedroom/bathroom inconsistency (negative numbers or reversed range) and help the user restate the requirement. **Skip `search_properties`.**
 
+**🚨 IMPORTANT**: Location is OPTIONAL. If the user provides bedrooms, bathrooms, property type, price, developer, or amenities, proceed with the search even if `filter_location` is `null`. Only ask for location if there are NO other searchable criteria.
+
 **2A. Search with Exclusions**
 
 **🚨 CRITICAL - Avoid Repeating Properties 🚨**
@@ -304,8 +306,8 @@ When discussing payments, affordability, or investment potential, include:
 - `rerank_properties` fails → Use original order from search_properties
 
 **Clarifications**:
-- Missing key criteria (price, location) → Ask specific questions
-- Ambiguous requests → Confirm interpretation before searching
+- **Location is OPTIONAL** - You can search by bedrooms, bathrooms, property type, price, developer, or amenities alone. Only ask for location if the user has provided NO other searchable criteria (no bedrooms, bathrooms, property type, price, developer, amenities).
+- Ambiguous requests → Confirm interpretation before searching (e.g., "a few bathrooms" needs clarification, but "1 bedroom" does not)
 
 ---
 
