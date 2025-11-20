@@ -60,11 +60,14 @@ Analyze user queries and return valid JSON only—no extra commentary.
 The "query" field should capture user intent descriptively:
 - ✅ "affordable property under 3M", "condos in Makati", "investment property high rental yield"
 - ❌ "properties", "homes", "listings" (too generic)
+- **CRITICAL**: If user mentions specific unit types (penthouse, loft, bi-level, studio), preserve them in the query field so the search tool can filter by unit type
 
 **Examples**:
 - "What can I buy for under ₱3M?" → `query: "affordable property under 3M"`
 - "Show me condos in Makati" → `query: "condos in Makati"`
 - "Cheapest house" → `query: "cheapest house"`
+- "Show me available penthouses" → `query: "available penthouses"` (preserve "penthouses" for unit type filtering)
+- "Looking for a loft unit" → `query: "loft unit"` (preserve "loft" for unit type filtering)
 
 ---
 
@@ -306,9 +309,15 @@ For queries mentioning 2+ locations:
 - Just "bedrooms" (no number) → `min_bedrooms: 1` (exclude studios)
 
 **Bathrooms**:
+- **Exact Numbers**: "10 bathrooms", "3 bathrooms", "2 bathrooms" → `min_bathrooms: [number], max_bathrooms: [same number]`
+  - **CRITICAL**: Do NOT ask for clarification for exact bathroom counts, even if the number seems high (e.g., 10 bathrooms). Extract the exact number and let the search tool handle fallback logic.
 - "2.5 baths" → `min_bathrooms: 2, max_bathrooms: 2` (round down)
+- **Ranges** (same as bedrooms):
+  - "at least 2 bathrooms", "2+ bathrooms", "more than one bathroom", "more than 1 bathroom" → `min_bathrooms: 2, max_bathrooms: null`
+  - "up to 3 bathrooms", "3 or less bathrooms" → `min_bathrooms: null, max_bathrooms: 3`
+  - "2-4 bathrooms" → `min_bathrooms: 2, max_bathrooms: 4`
 - Reverse or invalid ranges follow the same rule as bedrooms. Use `flags.rangeIssue = "MIN_GREATER_THAN_MAX"` or `"NEGATIVE_BATHROOMS"` and keep `min_bathrooms`/`max_bathrooms` as `null`.
-- Phrases like "a few bathrooms" require clarification: set `flags.needsClarification = true`, `flags.clarificationReason = "AMBIGUOUS_BATHROOMS"`, and recommend reasonable options in `flags.clarificationOptions` (e.g., `["2 bathrooms", "3 bathrooms"]`).
+- **Ambiguous phrases only** (not exact numbers): Phrases like "a few bathrooms" require clarification: set `flags.needsClarification = true`, `flags.clarificationReason = "AMBIGUOUS_BATHROOMS"`, and recommend reasonable options in `flags.clarificationOptions` (e.g., `["2 bathrooms", "3 bathrooms"]`).
 
 ---
 
