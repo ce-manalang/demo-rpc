@@ -35,7 +35,8 @@ Analyze user queries and return valid JSON only—no extra commentary.
     "unrealisticPrice": boolean,
     "priceOutlier": "TOO_LOW" | "TOO_HIGH" | null,
     "rangeIssue": "NEGATIVE_BEDROOMS" | "NEGATIVE_BATHROOMS" | "MIN_GREATER_THAN_MAX" | null,
-    "softNotes": string[] | null
+    "softNotes": string[] | null,
+    "isLoanQuery": boolean
   }
 }
 ```
@@ -53,6 +54,7 @@ Analyze user queries and return valid JSON only—no extra commentary.
   - `priceOutlier`: Specify whether the unrealistic price is `"TOO_LOW"` or `"TOO_HIGH"`.
   - `rangeIssue`: Identify impossible bedroom/bathroom inputs such as negatives or reversed ranges.
   - `softNotes`: Optional array for additional guidance (e.g., `"User emphasized waterfront views"`).
+  - `isLoanQuery`: Set to `true` when the user is asking about home loans, mortgages, financing, or loan applications for real estate properties. Set to `false` for property search queries or irrelevant financing (e.g., car loans).
 
 ## Processing Rules
 
@@ -129,6 +131,43 @@ Extract only the real estate portion:
 - ✅ "what's available in Makati?" → Real estate (means: properties available) ✅
 - ❌ "tell me a joke" (clearly not real estate) → NOT real estate
 - ❌ "what's the weather in Manila?" (clearly not real estate) → NOT real estate
+
+---
+
+### 2.5. Loan Query Detection (CRITICAL)
+
+**🚨 Detect Home Loan / Mortgage / Financing Queries 🚨**
+
+If the user is asking about loans, mortgages, financing, or loan applications for real estate properties, set `flags.isLoanQuery = true`.
+
+**Loan-Related Keywords** (set `isLoanQuery: true`):
+- "loan", "home loan", "house loan", "property loan", "housing loan"
+- "mortgage", "mortgage rate", "mortgage application"
+- "financing", "property financing", "home financing", "house financing"
+- "loan payment", "loan application", "apply for loan", "loan approval"
+- "how to finance", "financing options", "payment plan", "installment"
+- "down payment", "monthly payment", "loan terms"
+
+**Examples of Loan Queries** (set `isLoanQuery: true`):
+- "I need a house loan" → `flags.isLoanQuery: true`
+- "How can I finance my property?" → `flags.isLoanQuery: true`
+- "What's the mortgage rate?" → `flags.isLoanQuery: true`
+- "Do you offer financing?" → `flags.isLoanQuery: true`
+- "I want to apply for a home loan" → `flags.isLoanQuery: true`
+
+**NOT Loan Queries** (set `isLoanQuery: false`):
+- "Show me condos in Makati" → `flags.isLoanQuery: false` (property search)
+- "Do you have car loans?" → `flags.isLoanQuery: false` (irrelevant financing)
+- "I need a business loan" → `flags.isLoanQuery: false` (not home/property related)
+- "Personal loan" → `flags.isLoanQuery: false` (not home/property related)
+
+**Mixed Queries** (property search + loan mention):
+- If the query is primarily about finding properties but mentions financing in passing, prioritize property search: `flags.isLoanQuery: false`
+- Example: "Show me properties under ₱5M with financing options" → `flags.isLoanQuery: false` (property search is primary)
+
+**When `isLoanQuery: true`**:
+- Still extract any property-related criteria (location, price, bedrooms) if mentioned, as these may be useful context
+- The assistant will handle the loan recommendation separately
 
 ---
 
