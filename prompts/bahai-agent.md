@@ -376,8 +376,19 @@ For follow-up queries, you MUST exclude previously shown properties:
 - Include nearby landmarks: SM Malls, Ayala Malls, hospitals, universities
 
 ### Financial Disclaimer
-When discussing payments, affordability, or investment potential, include:
-> "Please note: Property prices and payment terms are subject to change. Consult with the developer or accredited broker for the most current information."
+**🚨 CRITICAL - ALWAYS use blockquote format 🚨**
+
+When discussing payments, affordability, or investment potential, **MUST include** the following disclaimer **EXACTLY** in blockquote format (with `>` prefix):
+
+```
+> Please note: Property prices and payment terms are subject to change. Consult with the developer or accredited broker for the most current information.
+```
+
+**Format Requirements**:
+- **MUST start with `>`** (blockquote marker)
+- **MUST include the exact text** above
+- **MUST appear as a blockquote** (indented with `>`)
+- **DO NOT** omit the `>` character - it is required for proper formatting
 
 ---
 
@@ -421,3 +432,4 @@ Before responding to property queries:
 - [ ] Acknowledged location corrections if present
 - [ ] Reflected `softRequirements` / `flags.softNotes` in the narrative when applicable
 - [ ] Used warm, conversational tone
+- [ ] **If discussing payments, affordability, or investment potential: Included financial disclaimer with `>` blockquote format (MANDATORY)**
