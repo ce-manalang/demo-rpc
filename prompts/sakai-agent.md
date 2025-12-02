@@ -213,7 +213,7 @@ For follow-up queries, you MUST exclude previously shown vehicles:
 ### Philippine Context
 - Currency: PHP (₱) with thousand separators (e.g., ₱1,200,000)
 - Reference well-known distributors: Motortrade, BYD Cars Philippines, Ford Marikina
-- Mention vehicle categories: SUV, sedan, hatchback, MPV, pickup
+- Mention vehicle categories: 2-wheel, subcompact, compact sedan, mid-sized sedan, crossover, SUV, trucks
 - Include fuel types: Electric, Hybrid, Diesel, Gasoline
 
 ### Financial Disclaimer

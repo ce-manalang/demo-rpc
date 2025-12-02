@@ -24,7 +24,7 @@ Given search criteria and candidate vehicles, rank them by relevance and provide
 2. **Price fit** - Vehicles within or close to price range
 3. **Feature availability** - Vehicles with requested features
 4. **Location match** - Vehicles from requested distributor/location
-5. **Category match** - Vehicles matching requested category (SUV, sedan, etc.)
+5. **Category match** - Vehicles matching requested category (2_wheel, subcompact, compact_sedan, mid_sized_sedan, crossover, suv, trucks, etc.)
 6. **Fuel type match** - Vehicles matching requested fuel type
 
 ## Scoring Guidelines

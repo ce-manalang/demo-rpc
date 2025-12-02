@@ -38,7 +38,7 @@ Analyze user queries about vehicles and return valid JSON only—no extra commen
 
 ### Field Notes
 - `filter_fuel_type` / `filter_distributor` / `filter_brand` / `filter_model` may be a single string or an array of strings.
-- `filter_category` values: "sedan", "suv", "hatchback", "mpv", "pickup", "coupe", "wagon", "performance", "electric_hybrid", etc.
+- `filter_category` values: "2_wheel", "subcompact", "compact_sedan", "mid_sized_sedan", "crossover", "suv", "trucks", etc.
 - `must_have_features` captures specific features like "360° camera", "Blind Spot Detection", "7 airbags", etc.
 - `flags` communicates validation results and clarification needs.
 
@@ -90,13 +90,15 @@ If query contains ANY of these words/phrases, it's a VEHICLE query:
 ---
 
 ### 4. Category Mapping
-- "sedan" → `filter_category: "sedan"`
+**🚨 IMPORTANT: Map to the actual database category values 🚨**
+- "2-wheel" / "2 wheel" / "two-wheel" / "two wheel" → `filter_category: "2_wheel"`
+- "subcompact" → `filter_category: "subcompact"`
+- "compact sedan" / "compact sedan" (both words required) → `filter_category: "compact_sedan"`
+- "mid-sized sedan" / "mid sized sedan" / "midsize sedan" / "mid-size sedan" → `filter_category: "mid_sized_sedan"`
+- "crossover" → `filter_category: "crossover"`
 - "SUV" / "suv" → `filter_category: "suv"`
-- "hatchback" → `filter_category: "hatchback"`
-- "MPV" / "mpv" → `filter_category: "mpv"`
-- "pickup" → `filter_category: "pickup"`
-- "electric" / "EV" → `filter_category: "electric_hybrid"`
-- "hybrid" → `filter_category: "electric_hybrid"`
+- "trucks" / "truck" → `filter_category: "trucks"`
+- **"sedan" alone (without "compact" or "mid-sized")** → `filter_category: "sedan"` (database uses "sedan" as a category)
 
 ---
 
@@ -111,6 +113,9 @@ If query contains ANY of these words/phrases, it's a VEHICLE query:
 ---
 
 ### 6. Seating Capacity Extraction
+**🚨 IMPORTANT: Only extract seating capacity if explicitly mentioned in the query 🚨**
+- Do NOT infer seating capacity from vehicle category names (e.g., "sedan" does NOT automatically mean 5-seater)
+- Only set seating filters when the user explicitly mentions seating capacity
 - "2-seater" → `min_seating: 2, max_seating: 2`
 - "4-seater" → `min_seating: 4, max_seating: 4`
 - "5-seater" → `min_seating: 5, max_seating: 5`
@@ -118,6 +123,7 @@ If query contains ANY of these words/phrases, it's a VEHICLE query:
 - "at least 5 seats" → `min_seating: 5, max_seating: null`
 - "up to 7 seats" → `min_seating: null, max_seating: 7`
 - "5-7 seats" → `min_seating: 5, max_seating: 7`
+- If seating is NOT explicitly mentioned → `min_seating: null, max_seating: null`
 
 ---
 
