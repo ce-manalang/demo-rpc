@@ -138,36 +138,57 @@ Extract only the real estate portion:
 
 **🚨 Detect Home Loan / Mortgage / Financing Queries 🚨**
 
-If the user is asking about loans, mortgages, financing, or loan applications for real estate properties, set `flags.isLoanQuery = true`.
+**ONLY** set `flags.isLoanQuery = true` if the user is asking about loans, mortgages, or financing **specifically for real estate properties** (homes, houses, condos, properties).
 
-**Loan-Related Keywords** (set `isLoanQuery: true`):
-- "loan", "home loan", "house loan", "property loan", "housing loan"
-- "mortgage", "mortgage rate", "mortgage application"
-- "financing", "property financing", "home financing", "house financing"
-- "loan payment", "loan application", "apply for loan", "loan approval"
-- "how to finance", "financing options", "payment plan", "installment"
-- "down payment", "monthly payment", "loan terms"
+**🚨 EXCLUSION RULES (CRITICAL) 🚨**
+
+**ALWAYS set `isLoanQuery: false` for**:
+- **Car loans**: "car loan", "auto loan", "vehicle loan", "I need a car loan"
+- **Personal loans**: "personal loan", "I need a personal loan", "apply for personal loan"
+- **Business loans**: "business loan", "commercial loan", "I need a business loan"
+- **Student loans**: "student loan", "education loan"
+- **Any non-property financing**: If the loan type is explicitly NOT for real estate, set `isLoanQuery: false`
+
+**Property-Related Loan Keywords** (set `isLoanQuery: true` ONLY if context is property-related):
+- "home loan", "house loan", "property loan", "housing loan", "real estate loan"
+- "mortgage", "mortgage rate", "mortgage application" (when context is about property)
+- "property financing", "home financing", "house financing"
+- "loan for property", "loan for house", "loan for condo"
+- "how to finance [a property/my house/this property]"
+- "down payment for property", "monthly payment for house"
+
+**Generic Loan Terms** (require property context to set `isLoanQuery: true`):
+- "loan" alone → Check context: if property-related → `true`, otherwise → `false`
+- "financing" alone → Check context: if property-related → `true`, otherwise → `false`
+- "loan application" → Check context: if property-related → `true`, otherwise → `false`
 
 **Examples of Loan Queries** (set `isLoanQuery: true`):
-- "I need a house loan" → `flags.isLoanQuery: true`
-- "How can I finance my property?" → `flags.isLoanQuery: true`
-- "What's the mortgage rate?" → `flags.isLoanQuery: true`
-- "Do you offer financing?" → `flags.isLoanQuery: true`
-- "I want to apply for a home loan" → `flags.isLoanQuery: true`
+- "I need a house loan" → `flags.isLoanQuery: true` ✅
+- "How can I finance my property?" → `flags.isLoanQuery: true` ✅
+- "What's the mortgage rate?" → `flags.isLoanQuery: true` ✅ (mortgage = property)
+- "I want to apply for a home loan" → `flags.isLoanQuery: true` ✅
+- "How much loan can I get for a ₱2.5M property?" → `flags.isLoanQuery: true` ✅
 
-**NOT Loan Queries** (set `isLoanQuery: false`):
-- "Show me condos in Makati" → `flags.isLoanQuery: false` (property search)
-- "Do you have car loans?" → `flags.isLoanQuery: false` (irrelevant financing)
-- "I need a business loan" → `flags.isLoanQuery: false` (not home/property related)
-- "Personal loan" → `flags.isLoanQuery: false` (not home/property related)
+**Examples of NON-Loan Queries** (set `isLoanQuery: false`):
+- "I need a car loan" → `flags.isLoanQuery: false` ❌ (car loan)
+- "Can I apply for a personal loan?" → `flags.isLoanQuery: false` ❌ (personal loan)
+- "Do you have car loans?" → `flags.isLoanQuery: false` ❌ (car loan)
+- "Show me condos in Makati" → `flags.isLoanQuery: false` ❌ (property search only)
+- "I need a business loan" → `flags.isLoanQuery: false` ❌ (business loan)
 
-**Mixed Queries** (property search + loan mention):
-- If the query is primarily about finding properties but mentions financing in passing, prioritize property search: `flags.isLoanQuery: false`
-- Example: "Show me properties under ₱5M with financing options" → `flags.isLoanQuery: false` (property search is primary)
+**Mixed Queries** (property search + loan question):
+- If query contains BOTH property search criteria AND loan/financing question:
+  - Set `flags.isLoanQuery: true` (to signal loan question exists)
+  - ALSO extract property search criteria normally (location, bedrooms, price, etc.)
+  - The assistant will handle BOTH: show properties AND address loan question
+- Examples:
+  - "Show me 2-bedroom units in QC and also how much loan I can get with a 30k salary" → `flags.isLoanQuery: true` + extract property criteria
+  - "Show me house and lot in Cavite and also compute the loan for a ₱2.5M budget" → `flags.isLoanQuery: true` + extract property criteria
+  - "Send me properties in Laguna and also explain how mortgage works" → `flags.isLoanQuery: true` + extract property criteria
 
 **When `isLoanQuery: true`**:
 - Still extract any property-related criteria (location, price, bedrooms) if mentioned, as these may be useful context
-- The assistant will handle the loan recommendation separately
+- The assistant will handle the loan recommendation (and property search if criteria exist)
 
 ---
 
